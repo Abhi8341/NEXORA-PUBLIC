@@ -1,0 +1,3739 @@
+# ============================================================
+# NEXORA PUBLIC v5.1
+# One-file Kivy Android Public Services App
+# Pydroid 3 friendly
+# ============================================================
+
+import os
+import json
+import threading
+import webbrowser
+from urllib.parse import quote
+
+import requests
+
+from kivy.app import App
+from kivy.clock import Clock
+from kivy.metrics import dp
+from kivy.core.window import Window
+
+from kivy.uix.screenmanager import (
+    ScreenManager,
+    Screen,
+    FadeTransition
+)
+
+from kivy.uix.boxlayout import BoxLayout
+from kivy.uix.gridlayout import GridLayout
+from kivy.uix.scrollview import ScrollView
+from kivy.uix.label import Label
+from kivy.uix.button import Button
+from kivy.uix.textinput import TextInput
+from kivy.uix.widget import Widget
+
+from kivy.graphics import Color, Ellipse
+
+try:
+    from plyer import gps
+    GPS_AVAILABLE = True
+except Exception:
+    GPS_AVAILABLE = False
+
+try:
+    from plyer import notification
+    NOTIFICATION_AVAILABLE = True
+except Exception:
+    NOTIFICATION_AVAILABLE = False
+
+
+# ============================================================
+# APP INFORMATION
+# ============================================================
+
+APP_NAME = "NEXORA Public"
+APP_VERSION = "5.1"
+
+BASE_DIR = os.path.dirname(
+    os.path.abspath(__file__)
+)
+
+PROFILE_FILE = os.path.join(
+    BASE_DIR,
+    "nexora_profile.json"
+)
+
+FAVORITES_FILE = os.path.join(
+    BASE_DIR,
+    "nexora_favorites.json"
+)
+
+THEME_FILE = os.path.join(
+    BASE_DIR,
+    "nexora_theme.json"
+)
+
+NOTIFICATION_FILE = os.path.join(
+    BASE_DIR,
+    "nexora_notifications.json"
+)
+
+
+# ============================================================
+# THEMES
+# ============================================================
+
+DARK = {
+    "bg": (0.025, 0.035, 0.055, 1),
+    "card": (0.075, 0.09, 0.125, 1),
+    "button": (0.11, 0.13, 0.18, 1),
+    "primary": (0.13, 0.42, 1, 1),
+    "green": (0.05, 0.65, 0.34, 1),
+    "red": (0.82, 0.16, 0.16, 1),
+    "orange": (0.93, 0.50, 0.08, 1),
+    "purple": (0.47, 0.27, 0.88, 1),
+    "cyan": (0.05, 0.60, 0.75, 1),
+    "text": (0.95, 0.97, 1, 1),
+    "secondary": (0.58, 0.63, 0.72, 1)
+}
+
+LIGHT = {
+    "bg": (0.94, 0.96, 0.98, 1),
+    "card": (1, 1, 1, 1),
+    "button": (0.86, 0.89, 0.94, 1),
+    "primary": (0.10, 0.37, 0.86, 1),
+    "green": (0.04, 0.58, 0.28, 1),
+    "red": (0.76, 0.12, 0.12, 1),
+    "orange": (0.88, 0.43, 0.04, 1),
+    "purple": (0.40, 0.22, 0.76, 1),
+    "cyan": (0.03, 0.50, 0.68, 1),
+    "text": (0.07, 0.09, 0.13, 1),
+    "secondary": (0.34, 0.39, 0.47, 1)
+}
+
+
+def load_theme():
+
+    try:
+
+        if os.path.exists(THEME_FILE):
+
+            with open(
+                THEME_FILE,
+                "r",
+                encoding="utf-8"
+            ) as f:
+
+                data = json.load(f)
+
+            if data.get("theme") in (
+                "dark",
+                "light"
+            ):
+
+                return data["theme"]
+
+    except Exception:
+        pass
+
+    return "dark"
+
+
+def save_theme(theme):
+
+    try:
+
+        with open(
+            THEME_FILE,
+            "w",
+            encoding="utf-8"
+        ) as f:
+
+            json.dump(
+                {"theme": theme},
+                f
+            )
+
+    except Exception:
+        pass
+
+
+CURRENT_THEME = load_theme()
+
+
+def C():
+
+    if CURRENT_THEME == "light":
+        return LIGHT
+
+    return DARK
+
+
+# ============================================================
+# PROFILE
+# ============================================================
+
+DEFAULT_PROFILE = {
+    "name": "",
+    "mobile": "",
+    "email": ""
+}
+
+
+def load_profile():
+
+    try:
+
+        if not os.path.exists(
+            PROFILE_FILE
+        ):
+            return DEFAULT_PROFILE.copy()
+
+        with open(
+            PROFILE_FILE,
+            "r",
+            encoding="utf-8"
+        ) as f:
+
+            data = json.load(f)
+
+        return {
+            "name": data.get(
+                "name",
+                ""
+            ),
+            "mobile": data.get(
+                "mobile",
+                ""
+            ),
+            "email": data.get(
+                "email",
+                ""
+            )
+        }
+
+    except Exception:
+
+        return DEFAULT_PROFILE.copy()
+
+
+def save_profile(data):
+
+    try:
+
+        with open(
+            PROFILE_FILE,
+            "w",
+            encoding="utf-8"
+        ) as f:
+
+            json.dump(
+                data,
+                f,
+                ensure_ascii=False,
+                indent=2
+            )
+
+        return True
+
+    except Exception:
+
+        return False
+
+
+# ============================================================
+# FAVORITES
+# ============================================================
+
+def load_favorites():
+
+    try:
+
+        if not os.path.exists(
+            FAVORITES_FILE
+        ):
+            return []
+
+        with open(
+            FAVORITES_FILE,
+            "r",
+            encoding="utf-8"
+        ) as f:
+
+            data = json.load(f)
+
+        if isinstance(data, list):
+            return data
+
+    except Exception:
+        pass
+
+    return []
+
+
+def save_favorites(data):
+
+    try:
+
+        with open(
+            FAVORITES_FILE,
+            "w",
+            encoding="utf-8"
+        ) as f:
+
+            json.dump(
+                data,
+                f,
+                ensure_ascii=False,
+                indent=2
+            )
+
+    except Exception:
+        pass
+
+
+# ============================================================
+# NOTIFICATION SETTINGS
+# ============================================================
+
+DEFAULT_NOTIFICATIONS = {
+    "enabled": True,
+    "weather": True,
+    "emergency": True,
+    "transport": True,
+    "airport": True,
+    "railway": True,
+    "tourist": True,
+    "quiet_mode": False,
+    "notification_time": "08:00"
+}
+
+
+def load_notifications():
+
+    try:
+
+        if not os.path.exists(
+            NOTIFICATION_FILE
+        ):
+            return DEFAULT_NOTIFICATIONS.copy()
+
+        with open(
+            NOTIFICATION_FILE,
+            "r",
+            encoding="utf-8"
+        ) as f:
+
+            data = json.load(f)
+
+        result = DEFAULT_NOTIFICATIONS.copy()
+
+        for key in result:
+
+            if key in data:
+
+                result[key] = data[key]
+
+        return result
+
+    except Exception:
+
+        return DEFAULT_NOTIFICATIONS.copy()
+
+
+def save_notifications(data):
+
+    try:
+
+        with open(
+            NOTIFICATION_FILE,
+            "w",
+            encoding="utf-8"
+        ) as f:
+
+            json.dump(
+                data,
+                f,
+                ensure_ascii=False,
+                indent=2
+            )
+
+        return True
+
+    except Exception:
+
+        return False
+
+
+# ============================================================
+# LOGO
+# ============================================================
+
+class NexoraLogo(Widget):
+
+    def __init__(
+        self,
+        logo_size=70,
+        **kwargs
+    ):
+
+        super().__init__(**kwargs)
+
+        self.size_hint = (
+            None,
+            None
+        )
+
+        self.size = (
+            dp(logo_size),
+            dp(logo_size)
+        )
+
+        with self.canvas:
+
+            Color(
+                0.10,
+                0.40,
+                1,
+                1
+            )
+
+            self.outer = Ellipse(
+                pos=self.pos,
+                size=self.size
+            )
+
+            Color(
+                1,
+                1,
+                1,
+                1
+            )
+
+            self.inner = Ellipse(
+                pos=(
+                    self.x + dp(13),
+                    self.y + dp(13)
+                ),
+                size=(
+                    dp(logo_size - 26),
+                    dp(logo_size - 26)
+                )
+            )
+
+        self.bind(
+            pos=self.update,
+            size=self.update
+        )
+
+    def update(self, *args):
+
+        self.outer.pos = self.pos
+        self.outer.size = self.size
+
+        self.inner.pos = (
+            self.x + dp(13),
+            self.y + dp(13)
+        )
+
+        self.inner.size = (
+            self.width - dp(26),
+            self.height - dp(26)
+        )
+
+
+# ============================================================
+# BUTTON
+# ============================================================
+
+class NButton(Button):
+
+    def __init__(
+        self,
+        text="",
+        bg=None,
+        font=12,
+        height=50,
+        **kwargs
+    ):
+
+        super().__init__(**kwargs)
+
+        c = C()
+
+        self.text = text
+        self.font_size = font
+        self.bold = True
+
+        self.background_normal = ""
+        self.background_down = ""
+
+        self.background_color = (
+            bg if bg is not None
+            else c["button"]
+        )
+
+        self.color = c["text"]
+
+        self.size_hint_y = None
+        self.height = dp(height)
+
+
+# ============================================================
+# BASE SCREEN
+# ============================================================
+
+class BaseScreen(Screen):
+    pass
+
+
+# ============================================================
+# SPLASH
+# ============================================================
+
+class SplashScreen(BaseScreen):
+
+    def __init__(self, **kwargs):
+
+        super().__init__(**kwargs)
+
+        c = C()
+
+        root = BoxLayout(
+            orientation="vertical",
+            padding=dp(20)
+        )
+
+        root.add_widget(
+            Widget()
+        )
+
+        row = BoxLayout(
+            size_hint_y=None,
+            height=dp(100)
+        )
+
+        row.add_widget(
+            Widget()
+        )
+
+        row.add_widget(
+            NexoraLogo(88)
+        )
+
+        row.add_widget(
+            Widget()
+        )
+
+        root.add_widget(row)
+
+        root.add_widget(
+            Label(
+                text="NEXORA",
+                font_size=32,
+                bold=True,
+                color=c["primary"],
+                size_hint_y=None,
+                height=dp(48)
+            )
+        )
+
+        root.add_widget(
+            Label(
+                text="PUBLIC",
+                font_size=17,
+                bold=True,
+                color=c["text"],
+                size_hint_y=None,
+                height=dp(35)
+            )
+        )
+
+        root.add_widget(
+            Label(
+                text="Public services made simple.",
+                font_size=14,
+                color=c["secondary"],
+                size_hint_y=None,
+                height=dp(40)
+            )
+        )
+
+        root.add_widget(
+            Widget()
+        )
+
+        self.add_widget(root)
+
+
+# ============================================================
+# HOME
+# ============================================================
+
+class HomeScreen(BaseScreen):
+
+    def __init__(self, **kwargs):
+
+        super().__init__(**kwargs)
+
+        self.root_layout = BoxLayout(
+            orientation="vertical",
+            padding=dp(10),
+            spacing=dp(5)
+        )
+
+        self.add_widget(
+            self.root_layout
+        )
+
+        self.build()
+
+    def on_pre_enter(self, *args):
+
+        self.build()
+
+    def build(self):
+
+        self.root_layout.clear_widgets()
+
+        c = C()
+
+        header = BoxLayout(
+            size_hint_y=None,
+            height=dp(58),
+            spacing=dp(6)
+        )
+
+        header.add_widget(
+            NexoraLogo(48)
+        )
+
+        brand = BoxLayout(
+            orientation="vertical"
+        )
+
+        brand.add_widget(
+            Label(
+                text="NEXORA",
+                font_size=22,
+                bold=True,
+                color=c["primary"],
+                halign="left"
+            )
+        )
+
+        brand.add_widget(
+            Label(
+                text="PUBLIC",
+                font_size=10,
+                bold=True,
+                color=c["secondary"],
+                halign="left"
+            )
+        )
+
+        header.add_widget(brand)
+        header.add_widget(Widget())
+
+        profile_btn = NButton(
+            text="👤",
+            bg=c["card"],
+            font=18,
+            height=45
+        )
+
+        profile_btn.size_hint_x = None
+        profile_btn.width = dp(48)
+
+        profile_btn.bind(
+            on_release=lambda x:
+            self.go("profile")
+        )
+
+        header.add_widget(profile_btn)
+
+        self.root_layout.add_widget(
+            header
+        )
+
+        profile = load_profile()
+
+        username = profile.get(
+            "name",
+            ""
+        )
+
+        welcome = (
+            "Welcome back, "
+            + username
+            if username
+            else
+            "Welcome to NEXORA Public"
+        )
+
+        self.root_layout.add_widget(
+            Label(
+                text=welcome,
+                color=c["text"],
+                font_size=14,
+                halign="left",
+                size_hint_y=None,
+                height=dp(28)
+            )
+        )
+
+        self.search = TextInput(
+            hint_text=(
+                "🔎 Search hospitals, buses, "
+                "airports, railway..."
+            ),
+            multiline=False,
+            size_hint_y=None,
+            height=dp(48),
+            padding=[
+                dp(13),
+                dp(12)
+            ],
+            background_color=c["card"],
+            foreground_color=c["text"],
+            hint_text_color=c["secondary"]
+        )
+
+        self.search.bind(
+            on_text_validate=
+            self.perform_search
+        )
+
+        self.root_layout.add_widget(
+            self.search
+        )
+
+        quick = GridLayout(
+            cols=3,
+            spacing=dp(5),
+            size_hint_y=None,
+            height=dp(70)
+        )
+
+        quick_items = [
+            (
+                "📍\nNearby",
+                "places",
+                c["green"]
+            ),
+            (
+                "🌦️\nWeather",
+                "weather",
+                c["primary"]
+            ),
+            (
+                "⭐\nSaved",
+                "favorites",
+                c["orange"]
+            )
+        ]
+
+        for text, screen, color in quick_items:
+
+            b = NButton(
+                text=text,
+                bg=color,
+                font=9,
+                height=68
+            )
+
+            b.bind(
+                on_release=lambda x,
+                s=screen:
+                self.go(s)
+            )
+
+            quick.add_widget(b)
+
+        self.root_layout.add_widget(
+            quick
+        )
+
+        emergency = NButton(
+            text="🚨  EMERGENCY & ESSENTIAL SERVICES",
+            bg=c["red"],
+            font=11,
+            height=46
+        )
+
+        emergency.bind(
+            on_release=lambda x:
+            self.go("emergency")
+        )
+
+        self.root_layout.add_widget(
+            emergency
+        )
+
+        self.root_layout.add_widget(
+            Label(
+                text="All Public Services",
+                color=c["text"],
+                font_size=17,
+                bold=True,
+                halign="left",
+                size_hint_y=None,
+                height=dp(35)
+            )
+        )
+
+        scroll = ScrollView()
+
+        grid = GridLayout(
+            cols=2,
+            spacing=dp(5),
+            size_hint_y=None
+        )
+
+        grid.bind(
+            minimum_height=
+            grid.setter("height")
+        )
+
+        services = [
+            ("🏥", "Hospitals"),
+            ("🚓", "Police"),
+            ("🚒", "Fire Stations"),
+            ("🏦", "Banks"),
+            ("🏫", "Schools"),
+            ("🏛️", "Government"),
+            ("🚉", "Railway"),
+            ("🚌", "Bus Stops"),
+            ("🚕", "Taxi Stands"),
+            ("✈️", "Airports"),
+            ("🏛️", "Tourist Places"),
+            ("🛒", "Markets")
+        ]
+
+        for icon, name in services:
+
+            button = NButton(
+                text=f"{icon}\n{name}",
+                bg=c["card"],
+                font=10,
+                height=62
+            )
+
+            button.bind(
+                on_release=lambda x,
+                category=name:
+                self.open_category(
+                    category
+                )
+            )
+
+            grid.add_widget(
+                button
+            )
+
+        scroll.add_widget(grid)
+
+        self.root_layout.add_widget(
+            scroll
+        )
+
+        nav = BoxLayout(
+            size_hint_y=None,
+            height=dp(48),
+            spacing=dp(4)
+        )
+
+        items = [
+            ("⌂\nHome", "home"),
+            ("📍\nNearby", "places"),
+            ("⭐\nSaved", "favorites"),
+            ("👤\nProfile", "profile"),
+            ("⚙\nSettings", "settings")
+        ]
+
+        for text, screen in items:
+
+            b = NButton(
+                text=text,
+                bg=(
+                    c["primary"]
+                    if screen == "home"
+                    else c["card"]
+                ),
+                font=8,
+                height=46
+            )
+
+            b.bind(
+                on_release=lambda x,
+                s=screen:
+                self.go(s)
+            )
+
+            nav.add_widget(b)
+
+        self.root_layout.add_widget(nav)
+
+    def go(self, screen):
+
+        self.manager.current = screen
+
+    def open_category(self, category):
+
+        self.manager.current = "places"
+
+        Clock.schedule_once(
+            lambda dt:
+            self.manager.get_screen(
+                "places"
+            ).set_category(category),
+            0.15
+        )
+
+    def perform_search(self, instance):
+
+        text = (
+            instance.text
+            .lower()
+            .strip()
+        )
+
+        if not text:
+            return
+
+        mappings = [
+            (
+                ["hospital", "clinic", "medical"],
+                "Hospitals"
+            ),
+            (
+                ["police"],
+                "Police"
+            ),
+            (
+                ["fire"],
+                "Fire Stations"
+            ),
+            (
+                ["bank", "atm"],
+                "Banks"
+            ),
+            (
+                ["school", "college"],
+                "Schools"
+            ),
+            (
+                ["government", "govt"],
+                "Government"
+            ),
+            (
+                ["railway", "train"],
+                "Railway"
+            ),
+            (
+                ["bus"],
+                "Bus Stops"
+            ),
+            (
+                ["taxi", "cab"],
+                "Taxi Stands"
+            ),
+            (
+                ["airport", "flight"],
+                "Airports"
+            ),
+            (
+                [
+                    "tourist",
+                    "tourism",
+                    "museum",
+                    "monument",
+                    "park"
+                ],
+                "Tourist Places"
+            ),
+            (
+                ["market", "shop"],
+                "Markets"
+            ),
+            (
+                ["weather", "temperature"],
+                "Weather"
+            )
+        ]
+
+        for words, category in mappings:
+
+            if any(
+                word in text
+                for word in words
+            ):
+
+                if category == "Weather":
+
+                    self.go("weather")
+
+                else:
+
+                    self.open_category(
+                        category
+                    )
+
+                return
+
+        self.manager.current = "places"
+
+        screen = self.manager.get_screen(
+            "places"
+        )
+
+        Clock.schedule_once(
+            lambda dt:
+            screen.search_custom(
+                instance.text.strip()
+            ),
+            0.15
+        )
+
+
+# ============================================================
+# WEATHER
+# ============================================================
+
+class WeatherScreen(BaseScreen):
+
+    def __init__(self, **kwargs):
+
+        super().__init__(**kwargs)
+
+        self.root_layout = BoxLayout(
+            orientation="vertical",
+            padding=dp(15),
+            spacing=dp(8)
+        )
+
+        self.add_widget(
+            self.root_layout
+        )
+
+        self.build()
+
+    def on_pre_enter(self, *args):
+
+        self.build()
+
+    def build(self):
+
+        self.root_layout.clear_widgets()
+
+        c = C()
+
+        self.root_layout.add_widget(
+            Label(
+                text="🌦️ Live Weather",
+                font_size=27,
+                bold=True,
+                color=c["text"],
+                size_hint_y=None,
+                height=dp(52)
+            )
+        )
+
+        self.city = TextInput(
+            hint_text="Enter city",
+            multiline=False,
+            size_hint_y=None,
+            height=dp(50),
+            padding=[
+                dp(13),
+                dp(12)
+            ],
+            background_color=c["card"],
+            foreground_color=c["text"],
+            hint_text_color=c["secondary"]
+        )
+
+        self.root_layout.add_widget(
+            self.city
+        )
+
+        button = NButton(
+            text="🌦️ GET LIVE WEATHER",
+            bg=c["primary"],
+            height=50
+        )
+
+        button.bind(
+            on_release=self.get_weather
+        )
+
+        self.root_layout.add_widget(button)
+
+        self.result = Label(
+            text=(
+                "Enter a city to view "
+                "current weather."
+            ),
+            font_size=15,
+            color=c["secondary"],
+            halign="left",
+            valign="top"
+        )
+
+        self.root_layout.add_widget(
+            self.result
+        )
+
+        self.root_layout.add_widget(
+            Widget()
+        )
+
+        self.root_layout.add_widget(
+            NButton(
+                text="← Home",
+                bg=c["card"],
+                height=46,
+                on_release=lambda x:
+                setattr(
+                    self.manager,
+                    "current",
+                    "home"
+                )
+            )
+        )
+
+    def get_weather(self, instance):
+
+        city = self.city.text.strip()
+
+        if not city:
+
+            self.result.text = (
+                "Please enter a city."
+            )
+
+            return
+
+        self.result.text = (
+            "Loading live weather..."
+        )
+
+        threading.Thread(
+            target=self.fetch_weather,
+            args=(city,),
+            daemon=True
+        ).start()
+
+    def fetch_weather(self, city):
+
+        try:
+
+            r = requests.get(
+                "https://geocoding-api.open-meteo.com/v1/search",
+                params={
+                    "name": city,
+                    "count": 1,
+                    "language": "en",
+                    "format": "json"
+                },
+                timeout=10
+            )
+
+            results = r.json().get(
+                "results",
+                []
+            )
+
+            if not results:
+
+                self.set_result(
+                    "City not found."
+                )
+
+                return
+
+            place = results[0]
+
+            lat = place["latitude"]
+            lon = place["longitude"]
+
+            r = requests.get(
+                "https://api.open-meteo.com/v1/forecast",
+                params={
+                    "latitude": lat,
+                    "longitude": lon,
+                    "current":
+                        "temperature_2m,"
+                        "relative_humidity_2m,"
+                        "apparent_temperature,"
+                        "weather_code,"
+                        "wind_speed_10m",
+                    "timezone": "auto"
+                },
+                timeout=10
+            )
+
+            current = r.json().get(
+                "current",
+                {}
+            )
+
+            temp = current.get(
+                "temperature_2m",
+                "?"
+            )
+
+            feels = current.get(
+                "apparent_temperature",
+                "?"
+            )
+
+            humidity = current.get(
+                "relative_humidity_2m",
+                "?"
+            )
+
+            wind = current.get(
+                "wind_speed_10m",
+                "?"
+            )
+
+            code = current.get(
+                "weather_code",
+                -1
+            )
+
+            descriptions = {
+                0: "Clear sky",
+                1: "Mainly clear",
+                2: "Partly cloudy",
+                3: "Overcast",
+                45: "Fog",
+                48: "Fog",
+                51: "Light drizzle",
+                53: "Drizzle",
+                55: "Heavy drizzle",
+                61: "Light rain",
+                63: "Rain",
+                65: "Heavy rain",
+                71: "Light snow",
+                73: "Snow",
+                75: "Heavy snow",
+                80: "Rain showers",
+                81: "Rain showers",
+                82: "Heavy rain showers",
+                95: "Thunderstorm",
+                96: "Thunderstorm",
+                99: "Thunderstorm"
+            }
+
+            description = descriptions.get(
+                code,
+                "Weather information"
+            )
+
+            text = (
+                f"📍 {place.get('name', city)}\n\n"
+                f"🌡️ Temperature: {temp}°C\n"
+                f"🌡️ Feels like: {feels}°C\n"
+                f"💧 Humidity: {humidity}%\n"
+                f"💨 Wind: {wind} km/h\n\n"
+                f"☁️ {description}"
+            )
+
+            self.set_result(text)
+
+            # Optional test notification
+            settings = load_notifications()
+
+            if (
+                settings["enabled"]
+                and settings["weather"]
+                and not settings["quiet_mode"]
+            ):
+
+                send_notification(
+                    "NEXORA Weather",
+                    (
+                        f"{place.get('name', city)}: "
+                        f"{temp}°C, {description}"
+                    )
+                )
+
+        except Exception as e:
+
+            print(
+                "Weather error:",
+                e
+            )
+
+            self.set_result(
+                "Unable to load weather.\n\n"
+                "Check your internet connection."
+            )
+
+    def set_result(self, text):
+
+        Clock.schedule_once(
+            lambda dt:
+            setattr(
+                self.result,
+                "text",
+                text
+            )
+        )
+
+
+# ============================================================
+# PLACES
+# ============================================================
+
+class PlacesScreen(BaseScreen):
+
+    def __init__(self, **kwargs):
+
+        super().__init__(**kwargs)
+
+        self.category = None
+        self.lat = None
+        self.lon = None
+
+        self.root_layout = BoxLayout(
+            orientation="vertical",
+            padding=dp(9),
+            spacing=dp(5)
+        )
+
+        self.add_widget(
+            self.root_layout
+        )
+
+        self.build()
+
+    def on_pre_enter(self, *args):
+
+        self.build()
+
+    def build(self):
+
+        self.root_layout.clear_widgets()
+
+        c = C()
+
+        self.root_layout.add_widget(
+            Label(
+                text="📍 Nearby Public Services",
+                font_size=24,
+                bold=True,
+                color=c["text"],
+                size_hint_y=None,
+                height=dp(48)
+            )
+        )
+
+        self.city = TextInput(
+            hint_text="Enter city / area / place",
+            multiline=False,
+            size_hint_y=None,
+            height=dp(46),
+            padding=[
+                dp(13),
+                dp(11)
+            ],
+            background_color=c["card"],
+            foreground_color=c["text"],
+            hint_text_color=c["secondary"]
+        )
+
+        self.root_layout.add_widget(
+            self.city
+        )
+
+        search = NButton(
+            text="🔎 SEARCH",
+            bg=c["primary"],
+            font=11,
+            height=44
+        )
+
+        search.bind(
+            on_release=lambda x:
+            self.search_current()
+        )
+
+        self.root_layout.add_widget(
+            search
+        )
+
+        gps_button = NButton(
+            text="📍 USE MY CURRENT LOCATION",
+            bg=c["green"],
+            font=10,
+            height=44
+        )
+
+        gps_button.bind(
+            on_release=lambda x:
+            self.use_gps()
+        )
+
+        self.root_layout.add_widget(
+            gps_button
+        )
+
+        category_scroll = ScrollView(
+            size_hint_y=None,
+            height=dp(48),
+            do_scroll_y=False
+        )
+
+        category_grid = GridLayout(
+            rows=1,
+            spacing=dp(4),
+            size_hint_x=None
+        )
+
+        category_grid.bind(
+            minimum_width=
+            category_grid.setter(
+                "width"
+            )
+        )
+
+        categories = [
+            ("🏥", "Hospitals"),
+            ("🚓", "Police"),
+            ("🚒", "Fire Stations"),
+            ("🏦", "Banks"),
+            ("🏫", "Schools"),
+            ("🏛️", "Government"),
+            ("🚉", "Railway"),
+            ("🚌", "Bus Stops"),
+            ("🚕", "Taxi Stands"),
+            ("✈️", "Airports"),
+            ("🏛️", "Tourist Places"),
+            ("🛒", "Markets")
+        ]
+
+        for icon, name in categories:
+
+            b = NButton(
+                text=f"{icon} {name}",
+                bg=c["card"],
+                font=8,
+                height=43
+            )
+
+            b.size_hint_x = None
+            b.width = dp(105)
+
+            b.bind(
+                on_release=lambda x,
+                n=name:
+                self.set_category(n)
+            )
+
+            category_grid.add_widget(b)
+
+        category_scroll.add_widget(
+            category_grid
+        )
+
+        self.root_layout.add_widget(
+            category_scroll
+        )
+
+        self.status = Label(
+            text="Choose a service category.",
+            color=c["secondary"],
+            font_size=11,
+            size_hint_y=None,
+            height=dp(28)
+        )
+
+        self.root_layout.add_widget(
+            self.status
+        )
+
+        scroll = ScrollView()
+
+        self.results = BoxLayout(
+            orientation="vertical",
+            spacing=dp(6),
+            size_hint_y=None
+        )
+
+        self.results.bind(
+            minimum_height=
+            self.results.setter(
+                "height"
+            )
+        )
+
+        scroll.add_widget(
+            self.results
+        )
+
+        self.root_layout.add_widget(
+            scroll
+        )
+
+        self.root_layout.add_widget(
+            NButton(
+                text="← Home",
+                bg=c["primary"],
+                height=44,
+                on_release=lambda x:
+                setattr(
+                    self.manager,
+                    "current",
+                    "home"
+                )
+            )
+        )
+
+    def set_category(self, category):
+
+        self.category = category
+
+        city = self.city.text.strip()
+
+        if (
+            self.lat is not None
+            and self.lon is not None
+        ):
+
+            self.search_coordinates()
+
+        elif city:
+
+            self.search_city()
+
+        else:
+
+            self.status.text = (
+                f"{category}\n"
+                "Enter a city or use GPS."
+            )
+
+    def search_custom(self, text):
+
+        self.city.text = text
+        self.category = "Search Results"
+
+        self.search_city()
+
+    def search_current(self):
+
+        city = self.city.text.strip()
+
+        if not city:
+
+            self.status.text = (
+                "Enter a city, area or place."
+            )
+
+            return
+
+        if self.category:
+
+            self.search_city()
+
+        else:
+
+            self.search_custom(city)
+
+    def search_city(self):
+
+        city = self.city.text.strip()
+
+        if not city:
+            return
+
+        self.status.text = (
+            "Finding location..."
+        )
+
+        threading.Thread(
+            target=self.geocode_city,
+            args=(city,),
+            daemon=True
+        ).start()
+
+    def geocode_city(self, city):
+
+        try:
+
+            response = requests.get(
+                "https://nominatim.openstreetmap.org/search",
+                params={
+                    "q": city,
+                    "format": "json",
+                    "limit": 1
+                },
+                headers={
+                    "User-Agent":
+                    "NEXORA-Public/5.1"
+                },
+                timeout=15
+            )
+
+            data = response.json()
+
+            if not data:
+
+                self.update_status(
+                    "Location not found."
+                )
+
+                return
+
+            self.lat = float(
+                data[0]["lat"]
+            )
+
+            self.lon = float(
+                data[0]["lon"]
+            )
+
+            Clock.schedule_once(
+                lambda dt:
+                self.search_coordinates()
+            )
+
+        except Exception:
+
+            self.update_status(
+                "Could not find location."
+            )
+
+    def use_gps(self):
+
+        self.status.text = (
+            "📍 Getting current location..."
+        )
+
+        if not GPS_AVAILABLE:
+
+            self.status.text = (
+                "GPS is unavailable.\n"
+                "Please enter a city instead."
+            )
+
+            return
+
+        try:
+
+            gps.configure(
+                on_location=self.on_gps_location,
+                on_status=self.on_gps_status
+            )
+
+            gps.start(
+                minTime=1000,
+                minDistance=1
+            )
+
+        except Exception:
+
+            self.status.text = (
+                "Could not start GPS."
+            )
+
+    def on_gps_location(self, **kwargs):
+
+        lat = kwargs.get("lat")
+        lon = kwargs.get("lon")
+
+        if lat is None or lon is None:
+            return
+
+        self.lat = float(lat)
+        self.lon = float(lon)
+
+        try:
+            gps.stop()
+        except Exception:
+            pass
+
+        Clock.schedule_once(
+            lambda dt:
+            self.location_ready()
+        )
+
+    def on_gps_status(self, *args):
+        pass
+
+    def location_ready(self):
+
+        self.status.text = (
+            "📍 Location ready."
+        )
+
+        if self.category:
+
+            self.search_coordinates()
+
+        else:
+
+            self.category = "Hospitals"
+            self.search_coordinates()
+
+    def search_coordinates(self):
+
+        if self.lat is None or self.lon is None:
+
+            self.status.text = (
+                "Location unavailable."
+            )
+
+            return
+
+        self.results.clear_widgets()
+
+        self.status.text = (
+            f"Searching {self.category}..."
+        )
+
+        threading.Thread(
+            target=self.query_overpass,
+            args=(
+                self.lat,
+                self.lon,
+                self.category
+            ),
+            daemon=True
+        ).start()
+
+    def get_filter(self, category):
+
+        filters = {
+            "Hospitals":
+                '["amenity"="hospital"]',
+            "Police":
+                '["amenity"="police"]',
+            "Fire Stations":
+                '["amenity"="fire_station"]',
+            "Banks":
+                '["amenity"="bank"]',
+            "Schools":
+                '["amenity"="school"]',
+            "Government":
+                '["office"="government"]',
+            "Railway":
+                '["railway"="station"]',
+            "Bus Stops":
+                '["highway"="bus_stop"]',
+            "Taxi Stands":
+                '["amenity"="taxi"]',
+            "Airports":
+                '["aeroway"="aerodrome"]',
+            "Markets":
+                '["shop"="supermarket"]'
+        }
+
+        return filters.get(
+            category,
+            '["name"]'
+        )
+
+    def tourist_query(self, lat, lon):
+
+        return f"""
+[out:json][timeout:35];
+
+(
+ node["tourism"="attraction"]
+ (around:20000,{lat},{lon});
+
+ way["tourism"="attraction"]
+ (around:20000,{lat},{lon});
+
+ node["tourism"="museum"]
+ (around:20000,{lat},{lon});
+
+ way["tourism"="museum"]
+ (around:20000,{lat},{lon});
+
+ node["tourism"="viewpoint"]
+ (around:20000,{lat},{lon});
+
+ way["tourism"="viewpoint"]
+ (around:20000,{lat},{lon});
+
+ node["historic"="monument"]
+ (around:20000,{lat},{lon});
+
+ way["historic"="monument"]
+ (around:20000,{lat},{lon});
+
+ node["historic"="memorial"]
+ (around:20000,{lat},{lon});
+
+ way["historic"="memorial"]
+ (around:20000,{lat},{lon});
+
+ node["historic"="castle"]
+ (around:20000,{lat},{lon});
+
+ way["historic"="castle"]
+ (around:20000,{lat},{lon});
+
+ node["historic"="fort"]
+ (around:20000,{lat},{lon});
+
+ way["historic"="fort"]
+ (around:20000,{lat},{lon});
+
+ node["leisure"="park"]
+ (around:20000,{lat},{lon});
+
+ way["leisure"="park"]
+ (around:20000,{lat},{lon});
+
+ node["leisure"="theme_park"]
+ (around:20000,{lat},{lon});
+
+ way["leisure"="theme_park"]
+ (around:20000,{lat},{lon});
+);
+
+out center tags;
+"""
+
+    def query_overpass(
+        self,
+        lat,
+        lon,
+        category
+    ):
+
+        try:
+
+            if category == "Tourist Places":
+
+                query = self.tourist_query(
+                    lat,
+                    lon
+                )
+
+            else:
+
+                filt = self.get_filter(
+                    category
+                )
+
+                query = f"""
+[out:json][timeout:35];
+
+(
+ node{filt}
+ (around:15000,{lat},{lon});
+
+ way{filt}
+ (around:15000,{lat},{lon});
+
+ relation{filt}
+ (around:15000,{lat},{lon});
+);
+
+out center tags;
+"""
+
+            response = requests.post(
+                "https://overpass-api.de/api/interpreter",
+                data=query,
+                headers={
+                    "User-Agent":
+                    "NEXORA-Public/5.1"
+                },
+                timeout=50
+            )
+
+            elements = response.json().get(
+                "elements",
+                []
+            )
+
+            places = []
+            seen = set()
+
+            bad_words = [
+                "hotel",
+                "hostel",
+                "guest house",
+                "guesthouse",
+                "resort",
+                "motel",
+                "lodge",
+                "homestay"
+            ]
+
+            bad_tourism = [
+                "hotel",
+                "hostel",
+                "guest_house",
+                "motel",
+                "camp_site",
+                "chalet",
+                "apartment"
+            ]
+
+            for element in elements:
+
+                tags = element.get(
+                    "tags",
+                    {}
+                )
+
+                name = (
+                    tags.get("name")
+                    or tags.get("official_name")
+                    or tags.get("alt_name")
+                )
+
+                if not name:
+                    continue
+
+                if category == "Tourist Places":
+
+                    lower = name.lower()
+
+                    if any(
+                        word in lower
+                        for word in bad_words
+                    ):
+                        continue
+
+                    tourism_type = tags.get(
+                        "tourism",
+                        ""
+                    )
+
+                    if tourism_type in bad_tourism:
+                        continue
+
+                key = name.lower().strip()
+
+                if key in seen:
+                    continue
+
+                seen.add(key)
+
+                place_lat = element.get("lat")
+                place_lon = element.get("lon")
+
+                if place_lat is None:
+
+                    center = element.get(
+                        "center",
+                        {}
+                    )
+
+                    place_lat = center.get("lat")
+                    place_lon = center.get("lon")
+
+                address_parts = []
+
+                for field in [
+                    "addr:housenumber",
+                    "addr:street",
+                    "addr:suburb",
+                    "addr:city",
+                    "addr:postcode"
+                ]:
+
+                    value = tags.get(field)
+
+                    if value:
+                        address_parts.append(value)
+
+                address = ", ".join(
+                    address_parts
+                )
+
+                description = (
+                    tags.get(
+                        "description",
+                        ""
+                    )
+                    or tags.get(
+                        "operator",
+                        ""
+                    )
+                    or tags.get(
+                        "brand",
+                        ""
+                    )
+                )
+
+                places.append({
+                    "name": name,
+                    "address": address,
+                    "description": description,
+                    "lat": place_lat,
+                    "lon": place_lon
+                })
+
+                if len(places) >= 40:
+                    break
+
+            Clock.schedule_once(
+                lambda dt,
+                p=places:
+                self.show_results(p)
+            )
+
+        except Exception as e:
+
+            print(
+                "Overpass error:",
+                e
+            )
+
+            self.update_status(
+                "Unable to load places.\n"
+                "Check your internet connection."
+            )
+
+    def show_results(self, places):
+
+        self.results.clear_widgets()
+
+        if not places:
+
+            self.status.text = (
+                "No suitable places found."
+            )
+
+            return
+
+        self.status.text = (
+            f"Found {len(places)} places."
+        )
+
+        c = C()
+
+        for place in places:
+
+            card = BoxLayout(
+                orientation="vertical",
+                padding=dp(6),
+                spacing=dp(4),
+                size_hint_y=None,
+                height=dp(145)
+            )
+
+            text = (
+                "📍 "
+                + place["name"]
+            )
+
+            if place["address"]:
+
+                text += (
+                    "\n"
+                    + place["address"]
+                )
+
+            if place["description"]:
+
+                text += (
+                    "\n"
+                    + place["description"]
+                )
+
+            card.add_widget(
+                Label(
+                    text=text,
+                    color=c["text"],
+                    font_size=11,
+                    halign="left"
+                )
+            )
+
+            row = BoxLayout(
+                size_hint_y=None,
+                height=dp(40),
+                spacing=dp(4)
+            )
+
+            maps = NButton(
+                text="🗺️ OPEN MAPS",
+                bg=c["green"],
+                font=9,
+                height=38
+            )
+
+            maps.bind(
+                on_release=lambda x,
+                p=place:
+                self.open_maps(p)
+            )
+
+            save = NButton(
+                text="⭐ SAVE",
+                bg=c["orange"],
+                font=9,
+                height=38
+            )
+
+            save.bind(
+                on_release=lambda x,
+                p=place:
+                self.save_place(p)
+            )
+
+            row.add_widget(maps)
+            row.add_widget(save)
+
+            card.add_widget(row)
+
+            self.results.add_widget(card)
+
+    def open_maps(self, place):
+
+        lat = place.get("lat")
+        lon = place.get("lon")
+
+        if lat is not None and lon is not None:
+
+            url = (
+                "https://www.google.com/maps/"
+                "search/?api=1&query="
+                f"{lat},{lon}"
+            )
+
+        else:
+
+            query = place["name"]
+
+            if place["address"]:
+
+                query += (
+                    " "
+                    + place["address"]
+                )
+
+            url = (
+                "https://www.google.com/maps/"
+                "search/?api=1&query="
+                + quote(query)
+            )
+
+        webbrowser.open(url)
+
+    def save_place(self, place):
+
+        favorites = load_favorites()
+
+        if any(
+            item.get("name")
+            == place["name"]
+            for item in favorites
+        ):
+
+            self.status.text = (
+                "⭐ Already saved."
+            )
+
+            return
+
+        favorites.append({
+            "name": place["name"],
+            "address": place["address"],
+            "description":
+                place["description"],
+            "latitude":
+                place["lat"],
+            "longitude":
+                place["lon"]
+        })
+
+        save_favorites(favorites)
+
+        self.status.text = (
+            "⭐ Place saved."
+        )
+
+    def update_status(self, text):
+
+        Clock.schedule_once(
+            lambda dt:
+            setattr(
+                self.status,
+                "text",
+                text
+            )
+        )
+
+
+# ============================================================
+# FAVORITES
+# ============================================================
+
+class FavoritesScreen(BaseScreen):
+
+    def __init__(self, **kwargs):
+
+        super().__init__(**kwargs)
+
+        self.root_layout = BoxLayout(
+            orientation="vertical",
+            padding=dp(14),
+            spacing=dp(7)
+        )
+
+        self.add_widget(
+            self.root_layout
+        )
+
+    def on_pre_enter(self, *args):
+
+        self.build()
+
+    def build(self):
+
+        self.root_layout.clear_widgets()
+
+        c = C()
+
+        self.root_layout.add_widget(
+            Label(
+                text="⭐ Saved Places",
+                font_size=26,
+                bold=True,
+                color=c["text"],
+                size_hint_y=None,
+                height=dp(50)
+            )
+        )
+
+        scroll = ScrollView()
+
+        self.list = BoxLayout(
+            orientation="vertical",
+            spacing=dp(6),
+            size_hint_y=None
+        )
+
+        self.list.bind(
+            minimum_height=
+            self.list.setter("height")
+        )
+
+        scroll.add_widget(self.list)
+
+        self.root_layout.add_widget(scroll)
+
+        self.root_layout.add_widget(
+            NButton(
+                text="← Home",
+                bg=c["primary"],
+                height=46,
+                on_release=lambda x:
+                setattr(
+                    self.manager,
+                    "current",
+                    "home"
+                )
+            )
+        )
+
+        self.refresh()
+
+    def refresh(self):
+
+        self.list.clear_widgets()
+
+        favorites = load_favorites()
+
+        c = C()
+
+        if not favorites:
+
+            self.list.add_widget(
+                Label(
+                    text=(
+                        "No saved places.\n\n"
+                        "Use ⭐ SAVE when viewing "
+                        "a place."
+                    ),
+                    color=c["secondary"],
+                    font_size=14
+                )
+            )
+
+            return
+
+        for index, place in enumerate(
+            favorites
+        ):
+
+            name = place.get(
+                "name",
+                "Saved place"
+            )
+
+            address = place.get(
+                "address",
+                ""
+            )
+
+            lat = place.get("latitude")
+            lon = place.get("longitude")
+
+            card = BoxLayout(
+                orientation="vertical",
+                spacing=dp(4),
+                padding=dp(5),
+                size_hint_y=None,
+                height=dp(120)
+            )
+
+            text = (
+                "⭐ "
+                + name
+            )
+
+            if address:
+                text += "\n" + address
+
+            card.add_widget(
+                Label(
+                    text=text,
+                    color=c["text"],
+                    font_size=12,
+                    halign="left"
+                )
+            )
+
+            row = BoxLayout(
+                size_hint_y=None,
+                height=dp(40),
+                spacing=dp(4)
+            )
+
+            maps = NButton(
+                text="🗺️ MAPS",
+                bg=c["green"],
+                font=9,
+                height=38
+            )
+
+            maps.bind(
+                on_release=lambda x,
+                n=name,
+                a=address,
+                la=lat,
+                lo=lon:
+                self.open_maps(
+                    n,
+                    a,
+                    la,
+                    lo
+                )
+            )
+
+            remove = NButton(
+                text="REMOVE",
+                bg=c["red"],
+                font=9,
+                height=38
+            )
+
+            remove.bind(
+                on_release=lambda x,
+                i=index:
+                self.remove(i)
+            )
+
+            row.add_widget(maps)
+            row.add_widget(remove)
+
+            card.add_widget(row)
+
+            self.list.add_widget(card)
+
+    def open_maps(
+        self,
+        name,
+        address,
+        lat,
+        lon
+    ):
+
+        if lat is not None and lon is not None:
+
+            url = (
+                "https://www.google.com/maps/"
+                "search/?api=1&query="
+                f"{lat},{lon}"
+            )
+
+        else:
+
+            query = name
+
+            if address:
+                query += " " + address
+
+            url = (
+                "https://www.google.com/maps/"
+                "search/?api=1&query="
+                + quote(query)
+            )
+
+        webbrowser.open(url)
+
+    def remove(self, index):
+
+        favorites = load_favorites()
+
+        if 0 <= index < len(favorites):
+
+            favorites.pop(index)
+
+            save_favorites(favorites)
+
+            self.refresh()
+
+
+# ============================================================
+# EMERGENCY
+# ============================================================
+
+class EmergencyScreen(BaseScreen):
+
+    def __init__(self, **kwargs):
+
+        super().__init__(**kwargs)
+
+        c = C()
+
+        root = BoxLayout(
+            orientation="vertical",
+            padding=dp(15),
+            spacing=dp(8)
+        )
+
+        root.add_widget(
+            Label(
+                text="🚨 Emergency Services",
+                font_size=26,
+                bold=True,
+                color=c["text"],
+                size_hint_y=None,
+                height=dp(50)
+            )
+        )
+
+        root.add_widget(
+            Label(
+                text=(
+                    "Find nearby emergency facilities.\n"
+                    "For immediate danger, contact "
+                    "your local emergency services."
+                ),
+                color=c["secondary"],
+                font_size=13
+            )
+        )
+
+        services = [
+            (
+                "🏥 FIND HOSPITALS",
+                "Hospitals"
+            ),
+            (
+                "🚓 FIND POLICE",
+                "Police"
+            ),
+            (
+                "🚒 FIND FIRE STATIONS",
+                "Fire Stations"
+            )
+        ]
+
+        for text, category in services:
+
+            b = NButton(
+                text=text,
+                bg=c["red"],
+                font=12,
+                height=58
+            )
+
+            b.bind(
+                on_release=lambda x,
+                cat=category:
+                self.open_category(cat)
+            )
+
+            root.add_widget(b)
+
+        root.add_widget(Widget())
+
+        root.add_widget(
+            NButton(
+                text="← Home",
+                bg=c["primary"],
+                height=46,
+                on_release=lambda x:
+                setattr(
+                    self.manager,
+                    "current",
+                    "home"
+                )
+            )
+        )
+
+        self.add_widget(root)
+
+    def open_category(self, category):
+
+        self.manager.current = "places"
+
+        Clock.schedule_once(
+            lambda dt:
+            self.manager.get_screen(
+                "places"
+            ).set_category(category),
+            0.15
+        )
+
+
+# ============================================================
+# PROFILE
+# ============================================================
+
+class ProfileScreen(BaseScreen):
+
+    def __init__(self, **kwargs):
+
+        super().__init__(**kwargs)
+
+        self.root_layout = BoxLayout(
+            orientation="vertical",
+            padding=dp(15),
+            spacing=dp(8)
+        )
+
+        self.add_widget(
+            self.root_layout
+        )
+
+    def on_pre_enter(self, *args):
+
+        self.build()
+
+    def build(self):
+
+        self.root_layout.clear_widgets()
+
+        c = C()
+
+        profile = load_profile()
+
+        self.root_layout.add_widget(
+            Label(
+                text="👤 My Profile",
+                font_size=27,
+                bold=True,
+                color=c["text"],
+                size_hint_y=None,
+                height=dp(50)
+            )
+        )
+
+        row = BoxLayout(
+            size_hint_y=None,
+            height=dp(90)
+        )
+
+        row.add_widget(Widget())
+        row.add_widget(NexoraLogo(82))
+        row.add_widget(Widget())
+
+        self.root_layout.add_widget(row)
+
+        name = (
+            profile["name"]
+            or "NEXORA User"
+        )
+
+        self.root_layout.add_widget(
+            Label(
+                text=name,
+                font_size=20,
+                bold=True,
+                color=c["text"],
+                size_hint_y=None,
+                height=dp(40)
+            )
+        )
+
+        details = (
+            "👤 Name: "
+            + (
+                profile["name"]
+                or "Not added"
+            )
+            + "\n\n"
+            "📱 Mobile: "
+            + (
+                profile["mobile"]
+                or "Not added"
+            )
+            + "\n\n"
+            "📧 Email: "
+            + (
+                profile["email"]
+                or "Not added"
+            )
+        )
+
+        self.root_layout.add_widget(
+            Label(
+                text=details,
+                color=c["text"],
+                font_size=14,
+                halign="left"
+            )
+        )
+
+        edit = NButton(
+            text="✏️ EDIT PERSONAL DETAILS",
+            bg=c["primary"],
+            height=54
+        )
+
+        edit.bind(
+            on_release=lambda x:
+            setattr(
+                self.manager,
+                "current",
+                "edit_profile"
+            )
+        )
+
+        self.root_layout.add_widget(edit)
+
+        self.root_layout.add_widget(Widget())
+
+        self.root_layout.add_widget(
+            NButton(
+                text="← Home",
+                bg=c["card"],
+                height=46,
+                on_release=lambda x:
+                setattr(
+                    self.manager,
+                    "current",
+                    "home"
+                )
+            )
+        )
+
+
+# ============================================================
+# EDIT PROFILE
+# ============================================================
+
+class EditProfileScreen(BaseScreen):
+
+    def __init__(self, **kwargs):
+
+        super().__init__(**kwargs)
+
+        self.root_layout = BoxLayout(
+            orientation="vertical",
+            padding=dp(15),
+            spacing=dp(8)
+        )
+
+        self.add_widget(
+            self.root_layout
+        )
+
+    def on_pre_enter(self, *args):
+
+        self.build()
+
+    def build(self):
+
+        self.root_layout.clear_widgets()
+
+        c = C()
+        profile = load_profile()
+
+        self.root_layout.add_widget(
+            Label(
+                text="✏️ Personal Details",
+                font_size=26,
+                bold=True,
+                color=c["text"],
+                size_hint_y=None,
+                height=dp(50)
+            )
+        )
+
+        self.name = TextInput(
+            text=profile["name"],
+            hint_text="Name / Username",
+            multiline=False,
+            size_hint_y=None,
+            height=dp(50),
+            padding=[dp(13), dp(12)],
+            background_color=c["card"],
+            foreground_color=c["text"],
+            hint_text_color=c["secondary"]
+        )
+
+        self.mobile = TextInput(
+            text=profile["mobile"],
+            hint_text="Mobile number",
+            multiline=False,
+            input_type="tel",
+            size_hint_y=None,
+            height=dp(50),
+            padding=[dp(13), dp(12)],
+            background_color=c["card"],
+            foreground_color=c["text"],
+            hint_text_color=c["secondary"]
+        )
+
+        self.email = TextInput(
+            text=profile["email"],
+            hint_text="Email address",
+            multiline=False,
+            size_hint_y=None,
+            height=dp(50),
+            padding=[dp(13), dp(12)],
+            background_color=c["card"],
+            foreground_color=c["text"],
+            hint_text_color=c["secondary"]
+        )
+
+        self.root_layout.add_widget(self.name)
+        self.root_layout.add_widget(self.mobile)
+        self.root_layout.add_widget(self.email)
+
+        save = NButton(
+            text="💾 SAVE PROFILE",
+            bg=c["green"],
+            height=54
+        )
+
+        save.bind(
+            on_release=lambda x:
+            self.save()
+        )
+
+        self.root_layout.add_widget(save)
+
+        self.message = Label(
+            text="",
+            color=c["secondary"],
+            size_hint_y=None,
+            height=dp(35)
+        )
+
+        self.root_layout.add_widget(
+            self.message
+        )
+
+        self.root_layout.add_widget(
+            Widget()
+        )
+
+        self.root_layout.add_widget(
+            NButton(
+                text="← Back",
+                bg=c["card"],
+                height=46,
+                on_release=lambda x:
+                setattr(
+                    self.manager,
+                    "current",
+                    "profile"
+                )
+            )
+        )
+
+    def save(self):
+
+        data = {
+            "name": self.name.text.strip(),
+            "mobile": self.mobile.text.strip(),
+            "email": self.email.text.strip()
+        }
+
+        if save_profile(data):
+
+            self.message.text = (
+                "✅ Profile saved."
+            )
+
+            Clock.schedule_once(
+                lambda dt:
+                setattr(
+                    self.manager,
+                    "current",
+                    "profile"
+                ),
+                0.6
+            )
+
+        else:
+
+            self.message.text = (
+                "❌ Could not save profile."
+            )
+
+
+# ============================================================
+# NOTIFICATION SETTINGS
+# ============================================================
+
+class NotificationScreen(BaseScreen):
+
+    def __init__(self, **kwargs):
+
+        super().__init__(**kwargs)
+
+        self.root_layout = BoxLayout(
+            orientation="vertical",
+            padding=dp(12),
+            spacing=dp(6)
+        )
+
+        self.add_widget(
+            self.root_layout
+        )
+
+    def on_pre_enter(self, *args):
+
+        self.build()
+
+    def build(self):
+
+        self.root_layout.clear_widgets()
+
+        c = C()
+
+        settings = load_notifications()
+
+        self.root_layout.add_widget(
+            Label(
+                text="🔔 Notifications",
+                font_size=27,
+                bold=True,
+                color=c["text"],
+                size_hint_y=None,
+                height=dp(50)
+            )
+        )
+
+        scroll = ScrollView()
+
+        content = BoxLayout(
+            orientation="vertical",
+            spacing=dp(7),
+            size_hint_y=None
+        )
+
+        content.bind(
+            minimum_height=
+            content.setter("height")
+        )
+
+        self.controls = {}
+
+        options = [
+            (
+                "enabled",
+                "🔔 Notifications",
+                "Enable or disable NEXORA notifications."
+            ),
+            (
+                "weather",
+                "🌦️ Weather",
+                "Weather-related notifications."
+            ),
+            (
+                "emergency",
+                "🚨 Emergency",
+                "Emergency-service information."
+            ),
+            (
+                "transport",
+                "🚌 Transport",
+                "Bus and taxi related information."
+            ),
+            (
+                "airport",
+                "✈️ Airport",
+                "Airport-related information."
+            ),
+            (
+                "railway",
+                "🚉 Railway",
+                "Railway-related information."
+            ),
+            (
+                "tourist",
+                "🏛️ Tourist Places",
+                "Tourism-related information."
+            ),
+            (
+                "quiet_mode",
+                "🔕 Quiet Mode",
+                "Temporarily reduce NEXORA notifications."
+            )
+        ]
+
+        for key, title, description in options:
+
+            row = BoxLayout(
+                orientation="vertical",
+                size_hint_y=None,
+                height=dp(72),
+                padding=dp(5)
+            )
+
+            top = BoxLayout(
+                size_hint_y=None,
+                height=dp(35)
+            )
+
+            label = Label(
+                text=title,
+                color=c["text"],
+                font_size=13,
+                bold=True,
+                halign="left"
+            )
+
+            button = NButton(
+                text=(
+                    "ON"
+                    if settings.get(key, False)
+                    else "OFF"
+                ),
+                bg=(
+                    c["green"]
+                    if settings.get(key, False)
+                    else c["button"]
+                ),
+                font=10,
+                height=34
+            )
+
+            button.size_hint_x = None
+            button.width = dp(75)
+
+            button.bind(
+                on_release=lambda x,
+                k=key:
+                self.toggle(k)
+            )
+
+            self.controls[key] = button
+
+            top.add_widget(label)
+            top.add_widget(button)
+
+            row.add_widget(top)
+
+            row.add_widget(
+                Label(
+                    text=description,
+                    color=c["secondary"],
+                    font_size=10,
+                    halign="left"
+                )
+            )
+
+            content.add_widget(row)
+
+        # Time
+
+        time_box = BoxLayout(
+            orientation="vertical",
+            size_hint_y=None,
+            height=dp(90)
+        )
+
+        time_box.add_widget(
+            Label(
+                text="⏰ Preferred Notification Time",
+                color=c["text"],
+                bold=True,
+                font_size=13,
+                halign="left",
+                size_hint_y=None,
+                height=dp(30)
+            )
+        )
+
+        self.time_input = TextInput(
+            text=settings.get(
+                "notification_time",
+                "08:00"
+            ),
+            hint_text="HH:MM",
+            multiline=False,
+            size_hint_y=None,
+            height=dp(45),
+            padding=[dp(12), dp(11)],
+            background_color=c["card"],
+            foreground_color=c["text"],
+            hint_text_color=c["secondary"]
+        )
+
+        time_box.add_widget(
+            self.time_input
+        )
+
+        content.add_widget(
+            time_box
+        )
+
+        save = NButton(
+            text="💾 SAVE NOTIFICATION SETTINGS",
+            bg=c["primary"],
+            height=54
+        )
+
+        save.bind(
+            on_release=lambda x:
+            self.save()
+        )
+
+        content.add_widget(save)
+
+        test = NButton(
+            text="🔔 SEND TEST NOTIFICATION",
+            bg=c["orange"],
+            height=50
+        )
+
+        test.bind(
+            on_release=lambda x:
+            self.test_notification()
+        )
+
+        content.add_widget(test)
+
+        self.message = Label(
+            text="",
+            color=c["secondary"],
+            font_size=11,
+            size_hint_y=None,
+            height=dp(40)
+        )
+
+        content.add_widget(
+            self.message
+        )
+
+        content.add_widget(
+            Widget(
+                size_hint_y=None,
+                height=dp(20)
+            )
+        )
+
+        scroll.add_widget(content)
+
+        self.root_layout.add_widget(scroll)
+
+        self.root_layout.add_widget(
+            NButton(
+                text="← Settings",
+                bg=c["card"],
+                height=46,
+                on_release=lambda x:
+                setattr(
+                    self.manager,
+                    "current",
+                    "settings"
+                )
+            )
+        )
+
+    def toggle(self, key):
+
+        settings = load_notifications()
+
+        settings[key] = not settings.get(
+            key,
+            False
+        )
+
+        save_notifications(settings)
+
+        button = self.controls.get(key)
+
+        if button:
+
+            c = C()
+
+            button.text = (
+                "ON"
+                if settings[key]
+                else "OFF"
+            )
+
+            button.background_color = (
+                c["green"]
+                if settings[key]
+                else c["button"]
+            )
+
+    def save(self):
+
+        settings = load_notifications()
+
+        settings["notification_time"] = (
+            self.time_input.text.strip()
+        )
+
+        if save_notifications(settings):
+
+            self.message.text = (
+                "✅ Notification settings saved."
+            )
+
+        else:
+
+            self.message.text = (
+                "❌ Could not save settings."
+            )
+
+    def test_notification(self):
+
+        settings = load_notifications()
+
+        if not settings["enabled"]:
+
+            self.message.text = (
+                "Notifications are currently OFF."
+            )
+
+            return
+
+        if settings["quiet_mode"]:
+
+            self.message.text = (
+                "Quiet Mode is ON."
+            )
+
+            return
+
+        if NOTIFICATION_AVAILABLE:
+
+            try:
+
+                notification.notify(
+                    title="NEXORA Public",
+                    message=(
+                        "This is a test notification "
+                        "from NEXORA."
+                    ),
+                    app_name="NEXORA Public",
+                    timeout=5
+                )
+
+                self.message.text = (
+                    "🔔 Test notification sent."
+                )
+
+                return
+
+            except Exception as e:
+
+                print(
+                    "Notification error:",
+                    e
+                )
+
+        self.message.text = (
+            "Android notification support "
+            "is not available in this Pydroid "
+            "environment."
+        )
+
+
+# ============================================================
+# SETTINGS
+# ============================================================
+
+class SettingsScreen(BaseScreen):
+
+    def __init__(self, **kwargs):
+
+        super().__init__(**kwargs)
+
+        self.root_layout = BoxLayout(
+            orientation="vertical",
+            padding=dp(14),
+            spacing=dp(7)
+        )
+
+        self.add_widget(
+            self.root_layout
+        )
+
+    def on_pre_enter(self, *args):
+
+        self.build()
+
+    def build(self):
+
+        self.root_layout.clear_widgets()
+
+        c = C()
+
+        self.root_layout.add_widget(
+            Label(
+                text="⚙ Settings",
+                font_size=27,
+                bold=True,
+                color=c["text"],
+                size_hint_y=None,
+                height=dp(50)
+            )
+        )
+
+        settings = load_notifications()
+
+        theme_text = (
+            "🌙 DARK THEME\n"
+            "Tap to switch to Light Theme"
+            if CURRENT_THEME == "dark"
+            else
+            "☀️ LIGHT THEME\n"
+            "Tap to switch to Dark Theme"
+        )
+
+        theme = NButton(
+            text=theme_text,
+            bg=c["primary"],
+            font=11,
+            height=65
+        )
+
+        theme.bind(
+            on_release=lambda x:
+            self.toggle_theme()
+        )
+
+        self.root_layout.add_widget(theme)
+
+        notification_status = (
+            "ON"
+            if settings["enabled"]
+            else "OFF"
+        )
+
+        notification_button = NButton(
+            text=(
+                "🔔 NOTIFICATIONS  ["
+                + notification_status
+                + "]\n"
+                "Weather, emergency and transport alerts"
+            ),
+            bg=c["orange"],
+            font=10,
+            height=65
+        )
+
+        notification_button.bind(
+            on_release=lambda x:
+            setattr(
+                self.manager,
+                "current",
+                "notifications"
+            )
+        )
+
+        self.root_layout.add_widget(
+            notification_button
+        )
+
+        buttons = [
+            (
+                "👤 PROFILE",
+                "Manage your personal details",
+                "profile"
+            ),
+            (
+                "🌐 INTERNET SERVICES",
+                "Online-service information",
+                "internet"
+            ),
+            (
+                "📍 LOCATION",
+                "GPS and location information",
+                "location"
+            ),
+            (
+                "🔒 PRIVACY",
+                "Privacy and local data",
+                "privacy"
+            ),
+            (
+                "ℹ️ ABOUT NEXORA",
+                f"Version {APP_VERSION}",
+                "about"
+            )
+        ]
+
+        for title, subtitle, screen in buttons:
+
+            b = NButton(
+                text=(
+                    title
+                    + "\n"
+                    + subtitle
+                ),
+                bg=c["card"],
+                font=10,
+                height=62
+            )
+
+            b.bind(
+                on_release=lambda x,
+                s=screen:
+                setattr(
+                    self.manager,
+                    "current",
+                    s
+                )
+            )
+
+            self.root_layout.add_widget(b)
+
+        self.root_layout.add_widget(
+            Widget()
+        )
+
+        self.root_layout.add_widget(
+            NButton(
+                text="← Home",
+                bg=c["primary"],
+                height=46,
+                on_release=lambda x:
+                setattr(
+                    self.manager,
+                    "current",
+                    "home"
+                )
+            )
+        )
+
+    def toggle_theme(self):
+
+        global CURRENT_THEME
+
+        if CURRENT_THEME == "dark":
+            CURRENT_THEME = "light"
+        else:
+            CURRENT_THEME = "dark"
+
+        save_theme(
+            CURRENT_THEME
+        )
+
+        Window.clearcolor = C()["bg"]
+
+        App.get_running_app().rebuild(
+            "settings"
+        )
+
+
+# ============================================================
+# INFORMATION
+# ============================================================
+
+class InfoScreen(BaseScreen):
+
+    def __init__(
+        self,
+        page="about",
+        **kwargs
+    ):
+
+        super().__init__(**kwargs)
+
+        self.page = page
+
+        self.root_layout = BoxLayout(
+            orientation="vertical",
+            padding=dp(15),
+            spacing=dp(8)
+        )
+
+        self.add_widget(
+            self.root_layout
+        )
+
+    def on_pre_enter(self, *args):
+
+        self.build()
+
+    def build(self):
+
+        self.root_layout.clear_widgets()
+
+        c = C()
+
+        titles = {
+            "internet":
+                "🌐 Internet Services",
+            "location":
+                "📍 Location",
+            "privacy":
+                "🔒 Privacy",
+            "about":
+                "ℹ️ About NEXORA"
+        }
+
+        self.root_layout.add_widget(
+            Label(
+                text=titles.get(
+                    self.page,
+                    "Information"
+                ),
+                font_size=25,
+                bold=True,
+                color=c["text"],
+                size_hint_y=None,
+                height=dp(50)
+            )
+        )
+
+        scroll = ScrollView()
+
+        info = Label(
+            font_size=14,
+            color=c["text"],
+            halign="left",
+            valign="top",
+            size_hint_y=None
+        )
+
+        if self.page == "internet":
+
+            text = (
+                "NEXORA Public uses internet services "
+                "for live features.\n\n"
+
+                "🌦️ WEATHER\n"
+                "Live weather requires an internet "
+                "connection.\n\n"
+
+                "📍 PUBLIC PLACES\n"
+                "Nearby-service searches use online "
+                "open map data.\n\n"
+
+                "🗺️ MAPS\n"
+                "The Maps button opens the selected "
+                "place in a map service.\n\n"
+
+                "🔔 NOTIFICATIONS\n"
+                "Some notification features may "
+                "require Android notification "
+                "permissions and background support."
+            )
+
+        elif self.page == "location":
+
+            text = (
+                "NEXORA can use Android location "
+                "when you request nearby services.\n\n"
+
+                "📍 GPS\n"
+                "GPS can be used for nearby searches.\n\n"
+
+                "🔎 MANUAL SEARCH\n"
+                "You can also enter a city or area "
+                "without GPS."
+            )
+
+        elif self.page == "privacy":
+
+            text = (
+                "NEXORA Public keeps basic profile "
+                "and saved-place information locally "
+                "on the device.\n\n"
+
+                "👤 PROFILE\n"
+                "Name, mobile number and email are "
+                "stored locally by this app.\n\n"
+
+                "⭐ SAVED PLACES\n"
+                "Saved places are stored locally.\n\n"
+
+                "🔔 NOTIFICATION SETTINGS\n"
+                "Notification preferences are stored "
+                "locally.\n\n"
+
+                "📍 LOCATION\n"
+                "Location is used when you request "
+                "nearby searches.\n\n"
+
+                "⚠️ IMPORTANT\n"
+                "Do not enter passwords, PINs, bank "
+                "details or other highly sensitive "
+                "information into NEXORA."
+            )
+
+        else:
+
+            text = (
+                "NEXORA PUBLIC\n\n"
+
+                f"Version {APP_VERSION}\n\n"
+
+                "A public-service application designed "
+                "to make everyday information easier "
+                "to find.\n\n"
+
+                "SERVICES\n\n"
+
+                "🏥 Hospitals\n"
+                "🚓 Police\n"
+                "🚒 Fire Stations\n"
+                "🏦 Banks\n"
+                "🏫 Schools\n"
+                "🏛️ Government\n"
+                "🚉 Railway Stations\n"
+                "🚌 Bus Stops\n"
+                "🚕 Taxi Stands\n"
+                "✈️ Airports\n"
+                "🏛️ Tourist Places\n"
+                "🛒 Markets\n\n"
+
+                "FEATURES\n\n"
+
+                "🔎 Search\n"
+                "📍 Nearby Services\n"
+                "🗺️ Maps\n"
+                "🌦️ Weather\n"
+                "⭐ Saved Places\n"
+                "👤 Profile\n"
+                "🔔 Notifications\n"
+                "🌙 Dark Mode\n"
+                "☀️ Light Mode\n\n"
+
+                "NEXORA Public v5.1"
+            )
+
+        info.text = text
+
+        info.bind(
+            texture_size=
+            info.setter("size")
+        )
+
+        scroll.add_widget(info)
+
+        self.root_layout.add_widget(scroll)
+
+        self.root_layout.add_widget(
+            NButton(
+                text="← Back to Settings",
+                bg=c["card"],
+                height=46,
+                on_release=lambda x:
+                setattr(
+                    self.manager,
+                    "current",
+                    "settings"
+                )
+            )
+        )
+
+
+# ============================================================
+# NOTIFICATION HELPER
+# ============================================================
+
+def send_notification(
+    title,
+    message
+):
+
+    if not NOTIFICATION_AVAILABLE:
+        return False
+
+    try:
+
+        notification.notify(
+            title=title,
+            message=message,
+            app_name="NEXORA Public",
+            timeout=5
+        )
+
+        return True
+
+    except Exception as e:
+
+        print(
+            "Notification error:",
+            e
+        )
+
+        return False
+
+
+# ============================================================
+# APP
+# ============================================================
+
+class NexoraPublicApp(App):
+
+    def build(self):
+
+        Window.clearcolor = C()["bg"]
+
+        self.manager = ScreenManager(
+            transition=FadeTransition(
+                duration=0.15
+            )
+        )
+
+        self.build_screens()
+
+        self.manager.current = "splash"
+
+        Clock.schedule_once(
+            self.open_home,
+            1.2
+        )
+
+        return self.manager
+
+    def build_screens(self):
+
+        self.manager.clear_widgets()
+
+        self.manager.add_widget(
+            SplashScreen(
+                name="splash"
+            )
+        )
+
+        self.manager.add_widget(
+            HomeScreen(
+                name="home"
+            )
+        )
+
+        self.manager.add_widget(
+            WeatherScreen(
+                name="weather"
+            )
+        )
+
+        self.manager.add_widget(
+            PlacesScreen(
+                name="places"
+            )
+        )
+
+        self.manager.add_widget(
+            FavoritesScreen(
+                name="favorites"
+            )
+        )
+
+        self.manager.add_widget(
+            EmergencyScreen(
+                name="emergency"
+            )
+        )
+
+        self.manager.add_widget(
+            ProfileScreen(
+                name="profile"
+            )
+        )
+
+        self.manager.add_widget(
+            EditProfileScreen(
+                name="edit_profile"
+            )
+        )
+
+        self.manager.add_widget(
+            SettingsScreen(
+                name="settings"
+            )
+        )
+
+        self.manager.add_widget(
+            NotificationScreen(
+                name="notifications"
+            )
+        )
+
+        self.manager.add_widget(
+            InfoScreen(
+                name="internet",
+                page="internet"
+            )
+        )
+
+        self.manager.add_widget(
+            InfoScreen(
+                name="location",
+                page="location"
+            )
+        )
+
+        self.manager.add_widget(
+            InfoScreen(
+                name="privacy",
+                page="privacy"
+            )
+        )
+
+        self.manager.add_widget(
+            InfoScreen(
+                name="about",
+                page="about"
+            )
+        )
+
+    def rebuild(self, screen="home"):
+
+        self.build_screens()
+
+        Window.clearcolor = C()["bg"]
+
+        if self.manager.has_screen(screen):
+
+            self.manager.current = screen
+
+        else:
+
+            self.manager.current = "home"
+
+    def open_home(self, dt):
+
+        if self.manager.has_screen("home"):
+
+            self.manager.current = "home"
+
+
+# ============================================================
+# START APP
+# ============================================================
+
+if __name__ == "__main__":
+
+    NexoraPublicApp().run()
