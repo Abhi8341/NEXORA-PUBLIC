@@ -1,4 +1,4 @@
-name: Build Nexora APK
+name: Build Nexora Android APK
 
 on:
   workflow_dispatch:
@@ -7,15 +7,15 @@ on:
       - main
 
 jobs:
-  build-android:
-    name: Build Nexora Android APK
-    runs-on: ubuntu-24.04
+  build:
+    name: Build Nexora APK
+    runs-on: ubuntu-22.04
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up Python
+      - name: Set up Python 3.12
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
@@ -23,7 +23,7 @@ jobs:
       - name: Set up Java 17
         uses: actions/setup-java@v4
         with:
-          distribution: "temurin"
+          distribution: temurin
           java-version: "17"
 
       - name: Install system dependencies
@@ -33,52 +33,41 @@ jobs:
             git \
             zip \
             unzip \
+            openjdk-17-jdk \
             autoconf \
-            automake \
             libtool \
             pkg-config \
             zlib1g-dev \
             libncurses5-dev \
             libncursesw5-dev \
-            libtinfo6 \
+            libtinfo5 \
             cmake \
             libffi-dev \
             libssl-dev \
-            gettext \
-            libltdl-dev
+            automake \
+            gettext
 
-      - name: Install Python build dependencies
+      - name: Upgrade pip tools
         run: |
           python -m pip install --upgrade pip setuptools wheel
-          python -m pip install "Cython==0.29.34"
-          python -m pip install virtualenv
-          python -m pip install buildozer
+          python -m pip install "cython==0.29.34"
 
-      - name: Accept Android SDK licenses
+      - name: Install Buildozer
         run: |
-          mkdir -p ~/.buildozer
-          echo "y" | buildozer android debug 2>&1 | head -n 1 || true
+          python -m pip install "buildozer==1.5.0"
+
+      - name: Clean previous Buildozer files
+        run: |
+          rm -rf .buildozer
+          rm -rf bin
 
       - name: Build Nexora APK
         run: |
           buildozer android debug
 
-      - name: Find APK
-        id: apk
-        run: |
-          APK=$(find bin -type f -name "*.apk" | head -n 1)
-
-          if [ -z "$APK" ]; then
-            echo "No APK was created."
-            exit 1
-          fi
-
-          echo "APK found: $APK"
-          echo "path=$APK" >> "$GITHUB_OUTPUT"
-
       - name: Upload Nexora APK
         uses: actions/upload-artifact@v4
         with:
           name: Nexora-APK
-          path: ${{ steps.apk.outputs.path }}
+          path: bin/*.apk
           if-no-files-found: error
