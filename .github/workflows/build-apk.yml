@@ -1,0 +1,31 @@
+name: Build Nexora APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+jobs:
+  build-android:
+    name: Build Nexora Android APK
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Build APK with Buildozer
+        uses: ArtemSBulgakov/buildozer-action@v1
+        id: buildozer
+        with:
+          workdir: .
+          buildozer_version: stable
+          command: buildozer android debug
+
+      - name: Upload Nexora APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Nexora-APK
+          path: ${{ steps.buildozer.outputs.filename }}
+          if-no-files-found: error
